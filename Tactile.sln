@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tactile", "Tactile\Tactile.csproj", "{F0DA3958-2B77-488E-8EB8-14471C5781AE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F0DA3958-2B77-488E-8EB8-14471C5781AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F0DA3958-2B77-488E-8EB8-14471C5781AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F0DA3958-2B77-488E-8EB8-14471C5781AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F0DA3958-2B77-488E-8EB8-14471C5781AE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FF72E57C-15BF-4A64-AFF9-1498E38C0816}
+	EndGlobalSection
+EndGlobal
