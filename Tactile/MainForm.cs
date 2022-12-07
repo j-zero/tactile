@@ -32,6 +32,8 @@ namespace Tactile
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr FindWindow(string strClassName, string strWindowName);
         [DllImport("user32.dll")]
+        private static extern IntPtr WindowFromPoint(Point p);
+        [DllImport("user32.dll")]
         static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll")]
         public static extern bool GetWindowRect(IntPtr hwnd, ref Rect rectangle);
@@ -80,24 +82,33 @@ namespace Tactile
         KeyboardHook keyboardHook = new KeyboardHook();
         int keyCounter = 0;
 
+        int defaultRasterX = 4;
+        int defaultRasterY = 2;
+
         int rasterX = 4;
         int rasterY = 2;
 
         List<Area> Areas = new List<Area>();
 
         //char[] keyMapChar = new char[] { 'q','w','e','r','a','s','d','f' };
-        Keys[] keyMap = new Keys[] { Keys.Q, Keys.W, Keys.E, Keys.R, Keys.A, Keys.S, Keys.D, Keys.F };
+        Keys[,] keyMap;
 
         Keys[] pressedKeys = new Keys[2];
         IntPtr foreignHandle;
 
         bool ignoreNextKeyUp = false;
 
+        int currentBackupIndex = 0;
         Dictionary<IntPtr, WINDOWPLACEMENT> positionBackups = new Dictionary<IntPtr, WINDOWPLACEMENT>();
-        //Dictionary<IntPtr,int>  windowStateBackups = new Dictionary<IntPtr,int>();
+
+        IntPtr lastMinimizedHandle = IntPtr.Zero;
+
+        public bool ShiftIsHold { get; private set; }
+
 
         public MainForm()
         {
+
 
             //SetStyle(ControlStyles.UserPaint, true);
             //SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
@@ -115,11 +126,46 @@ namespace Tactile
         {
             this.foreignHandle = GetForegroundWindow();
 
-            
+            SetRasterForScreen();
             //this.BackgroundImage = CaptureScreen(Screen.FromHandle(Handle));
             PushMeToFront();
             ignoreNextKeyUp = true;
             //MoveWindow(handle, 600, 600, 600, 600, true);
+        }
+
+        void SetRasterForScreen()
+        {
+            Screen scr = Screen.FromHandle(this.foreignHandle);
+
+            if (scr.WorkingArea.Width >= scr.WorkingArea.Height) // horizontal/quadratisch
+            {
+                rasterX = defaultRasterX;
+                rasterY = defaultRasterY;
+            }
+            else if (scr.WorkingArea.Width < scr.WorkingArea.Height) // vertikal
+            {
+                rasterX = defaultRasterY <= 6 ? defaultRasterY: 6;
+                rasterY = defaultRasterX <= 4 ? defaultRasterX : 4;
+            }
+
+            if (rasterY > 3)
+            {
+                this.keyMap = new Keys[4, 7] {
+                        {Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7},
+                        {Keys.Q, Keys.W, Keys.E, Keys.R, Keys.T, Keys.Z, Keys.U},
+                        {Keys.A, Keys.S, Keys.D, Keys.F, Keys.G, Keys.H, Keys.J},
+                        {Keys.Y, Keys.X, Keys.C, Keys.V, Keys.B, Keys.N, Keys.M }
+                   };
+            }
+            else
+            {
+                this.keyMap = new Keys[3, 7] {
+                        //{Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7},
+                        {Keys.Q, Keys.W, Keys.E, Keys.R, Keys.T, Keys.Z, Keys.U},
+                        {Keys.A, Keys.S, Keys.D, Keys.F, Keys.G, Keys.H, Keys.J},
+                        {Keys.Y, Keys.X, Keys.C, Keys.V, Keys.B, Keys.N, Keys.M }
+                   };
+            }
         }
 
         void PushMeToFront()
@@ -166,23 +212,53 @@ namespace Tactile
 
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
-            if(e.KeyCode == Keys.PageUp)
+            
+            if (e.KeyCode == Keys.Escape)
             {
-                ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MAXIMIZE);
+                HideMe();
             }
             else if (e.KeyCode == Keys.Space)
             {
                 ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_RESTORE);
                 HideMe();
             }
-            else if(e.KeyCode == Keys.PageDown)
+            else if (e.KeyCode == Keys.Up)
+            {
+                if(this.lastMinimizedHandle != IntPtr.Zero)
+                    ShowWindow(this.lastMinimizedHandle, (uint)ShowWindowCommands.SW_RESTORE);
+            }
+
+            else if (e.KeyCode == Keys.Down)
             {
                 ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MINIMIZE);
+                this.lastMinimizedHandle = this.foreignHandle;
                 HideMe();
+            }
+            else if (e.KeyCode == Keys.ShiftKey)
+            {
+                this.ShiftIsHold = true;
+            }
+            else if (e.KeyCode == Keys.Tab)
+            {
+                if (positionBackups.Count > 0)
+                {
+                    IntPtr hwnd = positionBackups.ElementAt(currentBackupIndex).Key;
+                    currentBackupIndex++;
+
+                    if(currentBackupIndex >= positionBackups.Count)
+                        currentBackupIndex = 0;
+
+                    SetForegroundWindow(hwnd);
+                    this.foreignHandle = hwnd;
+
+                    PushMeToFront();
+                    this.Invalidate();
+                }
             }
             else if (e.KeyCode == Keys.Back) // Backspace
             {
-                if (positionBackups.ContainsKey(this.foreignHandle)) {
+                if (positionBackups.ContainsKey(this.foreignHandle))
+                {
 
                     var placement = positionBackups[this.foreignHandle];
                     //var currentPos = GetPlacement(this.foreignHandle);
@@ -198,18 +274,21 @@ namespace Tactile
                     HideMe();
                 }
             }
-            else if (keyMap.Contains(e.KeyCode))
+            else if (KeymapContains(e.KeyCode))
             { // is valid key?
                 e.SuppressKeyPress = true;
                 pressedKeys[keyCounter] = e.KeyCode;
+                if (!e.Shift)
+                    keyCounter++;
 
-                if (++keyCounter == 2)  // are two keys pressed?
+                if (keyCounter == 2)  // are two keys pressed?
                 {
 
                     keyCounter = 0;
 
-                    int p1 = Array.IndexOf(keyMap, pressedKeys[0]);
-                    int p2 = Array.IndexOf(keyMap, pressedKeys[1]);
+
+                    int p1 = KeymapToAreaPosition(pressedKeys[0]);
+                    int p2 = KeymapToAreaPosition(pressedKeys[1]);
 
                     Area a1 = Areas[p1];
                     Area a2 = Areas[p2];
@@ -219,7 +298,7 @@ namespace Tactile
                     int w = a2.To.X - a1.From.X;
                     int h = a2.To.Y - a1.From.Y;
 
-                    if(a1.From.X > a2.From.X)
+                    if (a1.From.X > a2.From.X)
                     {
                         x = a2.From.X;
                         w = a1.To.X - a2.From.X;
@@ -241,6 +320,13 @@ namespace Tactile
                     SetForegroundWindow(this.foreignHandle);
 
                 }
+                else if (e.Shift)
+                {
+                    keyCounter = 0;
+                    Area a = Areas[KeymapToAreaPosition(e.KeyCode)];
+                    IntPtr hwnd = WindowFromPoint(new Point(a.From.X + 64, a.From.Y + 64));
+                    SetForegroundWindow(hwnd);
+                }
                 else
                 {
                     //label2.Text += e.KeyChar.ToString();
@@ -252,6 +338,41 @@ namespace Tactile
                 HideMe();
             }
             
+        }
+
+        bool KeymapContains(Keys KeyCode)
+        {
+            int iL = this.keyMap.GetLength(0);
+            int kL = this.keyMap.GetLength(1);
+            for(int i = 0; i < rasterX; i++)
+            {
+                for(int k= 0; k < rasterY; k++)
+                {
+                    if (keyMap[k,i] == KeyCode)
+                        return true;
+                }
+            }
+            ;
+            return false;
+        }
+        int KeymapToAreaPosition(Keys KeyCode)
+        {
+            int iL = this.keyMap.GetLength(0);
+            int kL = this.keyMap.GetLength(1);
+            int r = 0;
+            for (int i = 0; i < rasterX; i++)
+            {
+                for (int k = 0; k < rasterY; k++)
+                {
+                    if (keyMap[k, i] == KeyCode)
+                    {
+                        r = k * rasterX + i;
+                        return r;
+                    }
+                }
+            }
+    ;
+            return -1;
         }
 
         void BackupHandlePos(IntPtr Handle)
@@ -294,10 +415,39 @@ namespace Tactile
             int factorX = fullWidth / rasterX;
             int factorY = fullHeight / rasterY;
 
+            //var placement = GetPlacement(this.foreignHandle);
 
+
+            // linien
+            for (int x = factorX; x < fullWidth; x += factorX)
+            {
+                e.Graphics.DrawLine(pen, x, 0, x, fullHeight);
+            }
+            for (int y = factorY; y < fullHeight; y += factorY)
+            {
+                e.Graphics.DrawLine(pen, 0, y, fullWidth, y);
+            }
+
+
+            int borderWidth = 2;
+            var placement = GetPlacement(this.foreignHandle);
+
+            if (placement.showCmd == ShowWindowCommands.SW_MAXIMIZE)
+            {
+                e.Graphics.DrawRectangle(new Pen(color2, borderWidth), Screen.FromHandle(this.foreignHandle).WorkingArea);
+            }
+            else
+            {
+                Rect rect = new Rect();
+                GetWindowRect(this.foreignHandle, ref rect);
+
+                e.Graphics.DrawRectangle(new Pen(color2, borderWidth), rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+            }
             int i = 0;
+            int k = 0;
             // text
-            for (int y = 0; y < fullHeight; y += factorY) { 
+            for (int y = 0; y < fullHeight; y += factorY) {
+                i = 0;
                 for (int x = 0; x < fullWidth; x += factorX)
                 {
                 
@@ -314,14 +464,14 @@ namespace Tactile
                     Areas.Add(area);
 
                     //e.Graphics.DrawString($"{i++.ToString()}: {strX}-{strY}", new Font("Tahoma", 18.0f), new SolidBrush(color), posX, posY);
-                    Keys k = keyMap[i];
-                    bool isPressed = pressedKeys.Contains(k);
+                    Keys ke = keyMap[k,i];
+                    bool isPressed = pressedKeys.Contains(ke);
                     //e.Graphics.DrawString($"{keyMap[i].ToString().ToUpper()}", new Font("Tahoma", 30.0f), new SolidBrush(isPressed ? color2 : color1), posX, posY);
 
                     // assuming g is the Graphics object on which you want to draw the text
                     GraphicsPath p = new GraphicsPath();
                     p.AddString(
-                        $"{keyMap[i].ToString().ToUpper()}",             // text to draw
+                        $"{keyMap[k,i].ToString().ToUpper()}",             // text to draw
                         FontFamily.GenericSansSerif,  // or any other font family
                         (int)FontStyle.Regular,      // font style (bold, italic, etc.)
                         e.Graphics.DpiY * 28.0f / 72,       // em size
@@ -335,17 +485,13 @@ namespace Tactile
 
 
                     i++;
+                    
                 }
+                k++;
             }
 
-            for (int x = factorX; x < fullWidth; x+= factorX)
-            {
-                e.Graphics.DrawLine(pen, x, 0, x, fullHeight);
-            }
-            for (int y = factorY; y < fullHeight; y += factorY)
-            {
-                e.Graphics.DrawLine(pen, 0, y, fullWidth, y);
-            }
+
+
         }
 
 
@@ -367,6 +513,10 @@ namespace Tactile
                 return;
             }
 
+            if (e.KeyCode == Keys.ShiftKey)
+            {
+                this.ShiftIsHold = false;
+            }
 
         }
     }
