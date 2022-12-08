@@ -1,4 +1,11 @@
-﻿using System;
+﻿/*
+ * TODO: 
+ * + Switch through windows in specific area
+ * 
+*/
+
+
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -37,6 +44,20 @@ namespace Tactile
         private static extern IntPtr WindowFromPoint(Point p);
         [DllImport("user32.dll")]
         static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
+        const UInt32 SWP_NOSIZE = 0x0001;
+        const UInt32 SWP_NOMOVE = 0x0002;
+        const UInt32 SWP_NOACTIVATE = 0x0010;
+
+        bool SetBackgroundWindow(IntPtr hWnd)
+        {
+            return SetWindowPos(hWnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
         [DllImport("user32.dll")]
         public static extern bool GetWindowRect(IntPtr hwnd, ref Rect rectangle);
 
@@ -147,6 +168,7 @@ namespace Tactile
         private bool moveOnKeyUp;
         private bool ignoreFocusLost;
 
+        Keys lastPressedKey = Keys.None;
         public MainForm()
         {
             this.Visible = false;
@@ -250,6 +272,7 @@ namespace Tactile
         }
         void HideMe()
         {
+            this.ignoreFocusLost = false;
             this.Hide();
             this.WindowState = FormWindowState.Normal;
             this.TopMost = false;
@@ -330,11 +353,14 @@ namespace Tactile
 
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
+            if (e.KeyCode == lastPressedKey)
+                return;
+
             var placement = GetPlacement(this.foreignHandle);
 
             if (e.KeyCode == Keys.Escape)
             {
-                SetForegroundWindow(this.foreignHandle);
+                //SetForegroundWindow(this.foreignHandle);
                 HideMe();
             }
             else if (e.KeyCode == Keys.Right)
@@ -376,6 +402,13 @@ namespace Tactile
             {
                 SetForegroundWindow(this.foreignHandle);
                 HideMe();
+            }
+            else if(e.KeyCode == Keys.ControlKey)
+            {
+                ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MINIMIZE);
+                this.lastMinimizedHandle = this.foreignHandle;
+                HideMe();
+
             }
             else if (e.KeyCode == Keys.Space)
             {
@@ -429,7 +462,7 @@ namespace Tactile
                 }
 
             }
-            else if (e.KeyCode == Keys.PageUp)
+            else if (e.KeyCode == Keys.Oem102)
             {
                 if (this.lastMinimizedHandle != IntPtr.Zero)
                     ShowWindow(this.lastMinimizedHandle, (uint)ShowWindowCommands.SW_RESTORE);
@@ -437,6 +470,10 @@ namespace Tactile
             else if (e.KeyCode == Keys.ShiftKey)
             {
                 this.ShiftIsHold = true;
+            }
+            else if (e.KeyCode == Keys.Menu)
+            {
+                ;//this.ShiftIsHold = true;
             }
             else if (e.KeyCode == Keys.Tab)
             {
@@ -487,44 +524,43 @@ namespace Tactile
             { // is valid key?
                 e.SuppressKeyPress = true;
                 pressedKeys[keyCounter] = e.KeyCode;
-                if (!e.Shift)
+                if (!e.Shift && !e.Alt)
                     keyCounter++;
 
                 if (keyCounter == 2)  // are two keys pressed?
                 {
-
                     keyCounter = 0;
-
 
                     int p1 = KeymapToAreaPosition(pressedKeys[0]);
                     int p2 = KeymapToAreaPosition(pressedKeys[1]);
+                    if(p1 != -1 && p2 != -1) { 
+                        Area a1 = Areas[p1];
+                        Area a2 = Areas[p2];
 
-                    Area a1 = Areas[p1];
-                    Area a2 = Areas[p2];
+                        int x = a1.From.X;
+                        int y = a1.From.Y;
+                        int w = a2.To.X - a1.From.X;
+                        int h = a2.To.Y - a1.From.Y;
 
-                    int x = a1.From.X;
-                    int y = a1.From.Y;
-                    int w = a2.To.X - a1.From.X;
-                    int h = a2.To.Y - a1.From.Y;
+                        if (a1.From.X > a2.From.X)
+                        {
+                            x = a2.From.X;
+                            w = a1.To.X - a2.From.X;
+                        }
 
-                    if (a1.From.X > a2.From.X)
-                    {
-                        x = a2.From.X;
-                        w = a1.To.X - a2.From.X;
+                        if (a1.From.Y > a2.From.Y)
+                        {
+                            y = a2.From.Y;
+                            h = a1.To.Y - a2.From.Y;
+                        }
+
+                        this.newPosition = new Rectangle(x, y, w, h);
+                        this.moveOnKeyUp = true;
                     }
-
-                    if (a1.From.Y > a2.From.Y)
-                    {
-                        y = a2.From.Y;
-                        h = a1.To.Y - a2.From.Y;
-                    }
-
-                    this.newPosition = new Rectangle(x, y, w, h);
-                    this.moveOnKeyUp = true;
                     this.Invalidate();
 
                 }
-                else if (e.Shift)
+                else if (e.Shift || e.Alt)
                 {
                     keyCounter = 0;
                     Area a = Areas[KeymapToAreaPosition(e.KeyCode)];
@@ -539,8 +575,12 @@ namespace Tactile
                     HighlightWindow(this.foreignHandle);
                     
                     SetForegroundWindow(hwnd);
-                    PushMeToFront(false);
+                    if (e.Shift)
+                        PushMeToFront(false);
+                    else
+                        HideMe();
                 }
+
                 else
                 {
                     //label2.Text += e.KeyChar.ToString();
@@ -740,6 +780,8 @@ namespace Tactile
 
         private void MainForm_KeyUp(object sender, KeyEventArgs e)
         {
+            if (e.KeyCode == lastPressedKey)
+                lastPressedKey = Keys.None;
 
             if (e.KeyCode == Keys.ShiftKey)
             {
