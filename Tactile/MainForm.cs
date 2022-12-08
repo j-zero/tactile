@@ -368,7 +368,8 @@ namespace Tactile
                 }
                 else
                 {
-                    ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MINIMIZE);
+                    SetForegroundWindow(this.foreignHandle);
+                    //ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MINIMIZE);
                 }
             }
             else if(e.KeyCode == Keys.Enter)
@@ -569,17 +570,19 @@ namespace Tactile
 
         bool KeymapContains(Keys KeyCode)
         {
-            int iL = this.keyMap.GetLength(0);
-            int kL = this.keyMap.GetLength(1);
-            for(int i = 0; i < rasterX; i++)
+            if (keyMap != null)
             {
-                for(int k= 0; k < rasterY; k++)
+                int iL = this.keyMap.GetLength(0);
+                int kL = this.keyMap.GetLength(1);
+                for (int i = 0; i < rasterX; i++)
                 {
-                    if (keyMap[k,i] == KeyCode)
-                        return true;
+                    for (int k = 0; k < rasterY; k++)
+                    {
+                        if (keyMap[k, i] == KeyCode)
+                            return true;
+                    }
                 }
             }
-            ;
             return false;
         }
         int KeymapToAreaPosition(Keys KeyCode)
