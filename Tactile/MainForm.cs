@@ -61,6 +61,10 @@ namespace Tactile
         [DllImport("user32.dll")]
         public static extern bool GetWindowRect(IntPtr hwnd, ref Rect rectangle);
 
+        [return: MarshalAs(UnmanagedType.Bool)]
+        [DllImport("user32.dll")]
+        internal static extern bool GetClientRect(IntPtr hwnd, ref Rect lpRect);
+
         [Serializable]
         [StructLayout(LayoutKind.Sequential)]
         internal struct WINDOWPLACEMENT
@@ -163,6 +167,7 @@ namespace Tactile
         int screenIndex = 0;
         Overlay overlay;
 
+        int margin = 4;
 
         Rectangle newPosition = new Rectangle();
         private bool moveOnKeyUp;
@@ -303,8 +308,15 @@ namespace Tactile
             else
             {
 
-                Rect rect = new Rect();
-                GetWindowRect(hWnd, ref rect);
+                Rect windowRect = new Rect();
+                Rect clientRect = new Rect();
+                GetWindowRect(hWnd, ref windowRect);
+                GetClientRect(hWnd, ref clientRect);
+
+                int ptDiffx = (windowRect.Right - windowRect.Left) - clientRect.Right;
+                int ptDiffy = (windowRect.Bottom - windowRect.Top) - clientRect.Bottom;
+                int border_thickness = ((windowRect.Right - windowRect.Left) - clientRect.Right) / 2;
+
 
                 //Point scrPos = this.PointToScreen(new Point(rect.Left, rect.Top));
 
@@ -312,10 +324,10 @@ namespace Tactile
 
                 //e.Graphics.DrawRectangle(new Pen(color2, borderWidth), rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
 
-                overlay.Left = rect.Left;
-                overlay.Top = rect.Top;
-                overlay.Width = rect.Right - rect.Left;
-                overlay.Height = rect.Bottom - rect.Top;
+                overlay.Left = windowRect.Left + border_thickness;
+                overlay.Top = windowRect.Top;
+                overlay.Width = clientRect.Right - clientRect.Left;
+                overlay.Height = clientRect.Bottom - clientRect.Top;
 
 
                 //MoveWindow(overlay.Handle, placement.rcNormalPosition.X, placement.rcNormalPosition.Y, placement.rcNormalPosition.Width, placement.rcNormalPosition.Height, true);
@@ -597,10 +609,23 @@ namespace Tactile
 
         void MoveWindowMagic()
         {
+            Rect windowRect = new Rect();
+            Rect clientRect = new Rect();
+            GetWindowRect(this.foreignHandle, ref windowRect);
+            GetClientRect(this.foreignHandle, ref clientRect);
+
+            int ptDiffx = (windowRect.Right - windowRect.Left) - clientRect.Right;
+            int ptDiffy = (windowRect.Bottom - windowRect.Top) - clientRect.Bottom;
+
+            int x = this.newPosition.X - (ptDiffx/2) + margin;
+            int y = this.newPosition.Y + margin;
+            int w = this.newPosition.Width + ptDiffx - (margin * 2);
+            int h = this.newPosition.Height + (ptDiffx / 2) - (margin * 2);
+
             BackupHandlePos(this.foreignHandle);
 
             ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_NORMAL);
-            MoveWindow(this.foreignHandle, this.newPosition.X, this.newPosition.Y, this.newPosition.Width, this.newPosition.Height, true);
+            MoveWindow(this.foreignHandle, x,y,w,h, true);
 
             HideMe();
 
