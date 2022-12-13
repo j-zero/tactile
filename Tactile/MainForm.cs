@@ -326,8 +326,8 @@ namespace Tactile
 
                 overlay.Left = windowRect.Left + border_thickness;
                 overlay.Top = windowRect.Top;
-                overlay.Width = clientRect.Right - clientRect.Left;
-                overlay.Height = clientRect.Bottom - clientRect.Top;
+                overlay.Width = windowRect.Right - windowRect.Left - border_thickness * 2;
+                overlay.Height = windowRect.Bottom - windowRect.Top - border_thickness;
 
 
                 //MoveWindow(overlay.Handle, placement.rcNormalPosition.X, placement.rcNormalPosition.Y, placement.rcNormalPosition.Width, placement.rcNormalPosition.Height, true);
@@ -759,7 +759,7 @@ namespace Tactile
 
                     string DEBUG = $"{area.From.ToString()}\n{this.PointToScreen(area.From).ToString()}";
 
-                    e.Graphics.DrawString($"{DEBUG}", new Font("Tahoma", 12.0f), new SolidBrush(Color.White), x + 16, y + 96);
+                   // e.Graphics.DrawString($"{DEBUG}", new Font("Tahoma", 12.0f), new SolidBrush(Color.White), x + 16, y + 96);
                     Keys ke = keyMap[k,i];
 
                     bool isPressed = pressedKeys.Contains(ke) && !ShiftIsHold;
