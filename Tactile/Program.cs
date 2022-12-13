@@ -16,7 +16,7 @@ namespace Tactile
         [STAThread]
         static void Main()
         {
-            SetProcessDPIAware();
+            //SetProcessDPIAware();
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);

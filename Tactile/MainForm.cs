@@ -533,6 +533,7 @@ namespace Tactile
 
                     int p1 = KeymapToAreaPosition(pressedKeys[0]);
                     int p2 = KeymapToAreaPosition(pressedKeys[1]);
+
                     if(p1 != -1 && p2 != -1) { 
                         Area a1 = Areas[p1];
                         Area a2 = Areas[p2];
@@ -599,7 +600,7 @@ namespace Tactile
             BackupHandlePos(this.foreignHandle);
 
             ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_NORMAL);
-            MoveWindow(this.foreignHandle, newPosition.X, newPosition.Y, newPosition.Width, newPosition.Height, true);
+            MoveWindow(this.foreignHandle, this.newPosition.X, this.newPosition.Y, this.newPosition.Width, this.newPosition.Height, true);
 
             HideMe();
 
@@ -630,9 +631,10 @@ namespace Tactile
             int iL = this.keyMap.GetLength(0);
             int kL = this.keyMap.GetLength(1);
             int r = 0;
-            for (int i = 0; i < rasterX; i++)
+
+            for (int k = 0; k < rasterY; k++) 
             {
-                for (int k = 0; k < rasterY; k++)
+                for (int i = 0; i < rasterX; i++)
                 {
                     if (keyMap[k, i] == KeyCode)
                     {
@@ -728,9 +730,11 @@ namespace Tactile
                     
                     Areas.Add(area);
 
-                    string DEBUG = $"{GetWindowClass(this.foreignHandle)}";
+                    //string DEBUG = $"{GetWindowClass(this.foreignHandle)}";y
 
-                    //e.Graphics.DrawString($"{DEBUG}", new Font("Tahoma", 18.0f), new SolidBrush(Color.White), 16, 16);
+                    string DEBUG = $"{area.From.ToString()}\n{this.PointToScreen(area.From).ToString()}";
+
+                    e.Graphics.DrawString($"{DEBUG}", new Font("Tahoma", 12.0f), new SolidBrush(Color.White), x + 16, y + 96);
                     Keys ke = keyMap[k,i];
 
                     bool isPressed = pressedKeys.Contains(ke) && !ShiftIsHold;
@@ -739,6 +743,8 @@ namespace Tactile
 
                     // assuming g is the Graphics object on which you want to draw the text
                     GraphicsPath p = new GraphicsPath();
+
+
                     p.AddString(
                         $"{keyMap[k,i].ToString().ToUpper()}",             // text to draw
                         FontFamily.GenericSansSerif,  // or any other font family
@@ -746,6 +752,7 @@ namespace Tactile
                         e.Graphics.DpiY * 48.0f / 72,       // em size
                         new Point(x + 16, y + 16),              // location where to draw text
                         new StringFormat());          // set options here (e.g. center alignment)
+
 
                     e.Graphics.FillPath(new SolidBrush(isPressed ? color2 : color1), p);
                     e.Graphics.DrawPath(new Pen(Color.Black, 1), p);
