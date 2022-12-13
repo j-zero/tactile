@@ -780,7 +780,7 @@ namespace Tactile
 
 
                     e.Graphics.FillPath(new SolidBrush(isPressed ? color2 : color1), p);
-                    e.Graphics.DrawPath(new Pen(Color.Black, 1), p);
+                    e.Graphics.DrawPath(new Pen(Color.Black, 2), p);
                    
 
 
