@@ -26,17 +26,22 @@ namespace Tactile
             }
         }
         
+        
         public Overlay()
         {
             InitializeComponent();
+            this.FormBorderStyle = FormBorderStyle.None;
+            //this.DrawStuff(255);
         }
 
         private void MarkerForm_Paint(object sender, PaintEventArgs e)
         {
-            using (var pen = new Pen(Color.Yellow, 4))
+            
+            using (var pen = new Pen(Color.OrangeRed, 4))
             {
                 e.Graphics.DrawRectangle(pen, this.ClientRectangle);
             }
+            
         }
 
         private void MarkerForm_Load(object sender, EventArgs e)

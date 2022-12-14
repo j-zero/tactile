@@ -37,8 +37,8 @@
             this.ClientSize = new System.Drawing.Size(800, 450);
             this.Name = "DebugForm";
             this.Text = "DebugForm";
+            this.TopMost = true;
             this.Load += new System.EventHandler(this.DebugForm_Load);
-            this.Move += new System.EventHandler(this.DebugForm_Move);
             this.ResumeLayout(false);
 
         }

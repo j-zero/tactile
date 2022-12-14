@@ -10,16 +10,12 @@ using System.Windows.Forms;
 
 namespace Tactile
 {
-    public partial class DebugForm : Form
+    public partial class DebugForm : PerPixelAlphaForm
     {
         public DebugForm()
         {
             InitializeComponent();
-        }
-
-        private void DebugForm_Move(object sender, EventArgs e)
-        {
-            this.Text = $"{this.Left}/{this.Top}";
+            this.DrawStuff(255);
         }
 
         private void DebugForm_Load(object sender, EventArgs e)
