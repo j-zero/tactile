@@ -41,6 +41,12 @@ namespace Tactile
             public Point To { get; set; }
         }
 
+
+        [DllImport("user32.dll")]
+        static extern bool GetCursorPos(ref Point lpPoint);
+        [DllImport("user32.dll")]
+        static extern bool SetPhysicalCursorPos([In] int x, [In] int y);
+
         [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Auto)]
         static extern IntPtr GetParent(IntPtr hWnd);
         [DllImport("user32.dll")]
@@ -108,6 +114,22 @@ namespace Tactile
         [DllImport("user32", CharSet = CharSet.Auto, SetLastError = true)]
         static extern int GetWindowText(IntPtr hWnd, [Out, MarshalAs(UnmanagedType.LPTStr)] StringBuilder lpString, int nMaxCount);
 
+        [Flags]
+        internal enum MONITOR_DEFAULTTO
+        {
+            NULL = 0x00000000,
+            PRIMARY = 0x00000001,
+            NEAREST = 0x00000002,
+        }
+
+        [DllImport("User32.dll", SetLastError = true)]
+        internal static extern IntPtr MonitorFromWindow(IntPtr hwnd, MONITOR_DEFAULTTO dwFlags);
+
+        [DllImport("User32.dll", SetLastError = true)]
+        internal static extern IntPtr MonitorFromPoint([In] Point pt, MONITOR_DEFAULTTO dwFlags);
+
+        [DllImport("User32.dll", SetLastError = true)]
+        internal static extern IntPtr MonitorFromRect([In] ref RECT lprc, MONITOR_DEFAULTTO dwFlags);
 
         public IntPtr GetMainWindow(IntPtr handle)
         {
@@ -196,7 +218,8 @@ namespace Tactile
         bool ignoreNextKeyUp = false;
 
         int currentBackupIndex = 0;
-        Dictionary<IntPtr, WINDOWPLACEMENT> positionBackups = new Dictionary<IntPtr, WINDOWPLACEMENT>();
+        //Dictionary<IntPtr, WINDOWPLACEMENT> positionBackups = new Dictionary<IntPtr, WINDOWPLACEMENT>();
+        Dictionary<IntPtr, Backup> positionBackups = new Dictionary<IntPtr, Backup>();
         Dictionary<Keys, IntPtr> macroHandles = new Dictionary<Keys, IntPtr>();
 
         IntPtr lastMinimizedHandle = IntPtr.Zero;
@@ -208,17 +231,21 @@ namespace Tactile
         Overlay overlay;
 
         int margin = 2;
+        int lineWidth = 2;
 
         Rectangle newPosition = new Rectangle();
         private bool moveOnKeyUp;
         private bool ignoreFocusLost;
 
         Color color2 = Color.Gold;
-        Color color1 = Color.LimeGreen;
+        Color color1 = Color.LightSkyBlue;
 
         Keys lastPressedKey = Keys.None;
         private int fullWidth;
         private int fullHeight;
+        private bool moveMouseIfOnWindow = true;
+        private bool windowWasPushed;
+        private bool macroWasSet;
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern UInt32 GetWindowLong(IntPtr hWnd, int nIndex);
@@ -226,6 +253,8 @@ namespace Tactile
         static extern int SetWindowLong(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
         [DllImport("user32.dll")]
         static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+
+        public const int GWL_STYLE = -16;
         public const int GWL_EXSTYLE = -20;
         public const int WS_EX_LAYERED = 0x80000;
         public const int WS_EX_TRANSPARENT = 0x20;
@@ -510,7 +539,7 @@ namespace Tactile
             }
             else if (e.KeyCode >= Keys.F1 && e.KeyCode <= Keys.F12)
             {
-
+                this.macroWasSet = true;
                 if (macroHandles.ContainsKey(e.KeyCode))
                 {
                     this.foreignHandle = macroHandles[e.KeyCode];
@@ -532,6 +561,26 @@ namespace Tactile
                     //ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MINIMIZE);
                 }
             }
+            else if (e.KeyCode == Keys.B)
+            {
+                var curWinPos = GetPlacement(this.foreignHandle).rcNormalPosition;
+                SetBackgroundWindow(this.foreignHandle);
+
+                //IntPtr hwnd = WindowFromPoint(new Point(curWinPos.X + (curWinPos.Width / 2), curWinPos.Y + (curWinPos.Height / 2)));
+
+                //IntPtr mainHandle = GetMainWindow(hwnd);
+
+                //BackupHandlePos(mainHandle);
+
+                //this.foreignHandle = mainHandle;
+                //this.Invalidate();
+                this.ignoreFocusLost = true;
+                //HighlightWindow(this.foreignHandle);
+
+                //SetForegroundWindow(hwnd);
+
+                HideMe();
+            }
             else if (e.KeyCode == Keys.Enter)
             {
                 SetForegroundWindow(this.foreignHandle);
@@ -550,16 +599,42 @@ namespace Tactile
                 //ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_RESTORE);
                 //HideMe();
 
+                Screen foreignScreen = Screen.FromHandle(this.foreignHandle);
+                Screen curScreen = Screen.FromControl(this);
 
-
-                if (placement.showCmd == ShowWindowCommands.SW_NORMAL)
+                if (foreignScreen.DeviceName == curScreen.DeviceName)
                 {
-                    ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MAXIMIZE);
+                    if (placement.showCmd == ShowWindowCommands.SW_NORMAL)
+                        ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MAXIMIZE);
+                    else
+                    
+                        ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_RESTORE);
                 }
                 else
                 {
-                    ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_RESTORE);
+                    //placement = GetPlacement(this.foreignHandle);
+                    if (placement.showCmd == ShowWindowCommands.SW_NORMAL)
+                        BackupHandlePos(this.foreignHandle);
+
+                    RECT windowRect = new RECT();
+                    RECT clientRect = new RECT();
+
+                    GetWindowRect(this.foreignHandle, ref windowRect);
+                    GetClientRect(this.foreignHandle, ref clientRect);
+
+                    //Rectangle r = new Rectangle(curScreen.WorkingArea.X + 16, curScreen.WorkingArea.Y, placement.rcNormalPosition.Width, placement.rcNormalPosition.Height);
+                    Rectangle r = windowRect;
+                    r.X = curScreen.WorkingArea.X + 16;
+                    r.Y = curScreen.WorkingArea.Y + 16;
+                    r.Width = currentScreen.WorkingArea.Width - 16;
+                    r.Height = currentScreen.WorkingArea.Height - 16;
+
+                    MoveWindowMagic(r);
+                   // if (placement.showCmd == ShowWindowCommands.SW_NORMAL)
+                    ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MAXIMIZE);
+                    ;
                 }
+
 
                 HideMe();
                 SetForegroundWindow(this.foreignHandle);
@@ -637,22 +712,7 @@ namespace Tactile
             }
             else if (e.KeyCode == Keys.Back) // Backspace
             {
-                if (positionBackups.ContainsKey(this.foreignHandle))
-                {
-
-                    var backupPlacement = positionBackups[this.foreignHandle];
-                    //var currentPos = GetPlacement(this.foreignHandle);
-
-                    SetWindowPlacement(this.foreignHandle, ref backupPlacement);
-
-                    /*
-                    if(pos.showCmd != currentPos.showCmd)
-                        ShowWindow(this.foreignHandle, (uint)pos.showCmd);
-                    else
-                        MoveWindow(this.foreignHandle, pos.rcNormalPosition.X, pos.rcNormalPosition.Y, pos.rcNormalPosition.Width-pos.rcNormalPosition.X, pos.rcNormalPosition.Height-pos.rcNormalPosition.Y, true);
-                    */
-                    HideMe();
-                }
+                RestoreBackupPosition(this.foreignHandle);
             }
             else if (KeymapContains(e.KeyCode))
             { // is valid key?
@@ -711,10 +771,17 @@ namespace Tactile
                     HighlightWindow(this.foreignHandle);
 
                     SetForegroundWindow(hwnd);
+
+                    PushMeToFront(false);
+
                     if (e.Shift)
-                        PushMeToFront(false);
+                    {
+                        windowWasPushed = true;
+                    }
                     else
-                        HideMe();
+                    {
+                        //HideMe();
+                    }
                 }
 
                 else
@@ -730,45 +797,165 @@ namespace Tactile
             
         }
 
-        void MoveWindowMagic()
+        void RestoreBackupPosition(IntPtr Handle)
+        {
+            if (positionBackups.ContainsKey(Handle))
+            {
+
+
+                var b = positionBackups[Handle];
+
+
+
+                Rectangle r = b.Rect;
+                //r.X = b.screen.WorkingArea.X + 16;
+                //r.Y = b.screen.WorkingArea.Y + 16;
+
+                //MoveWindowMagic(r);
+                // if (placement.showCmd == ShowWindowCommands.SW_NORMAL)
+                //ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MAXIMIZE);
+
+                //MoveWindowMagic(new Rectangle(backupPlacement.rcNormalPosition.X, backupPlacement.rcNormalPosition.Y, backupPlacement.rcNormalPosition.Width, backupPlacement.rcNormalPosition.Height));
+                ShowWindow(this.foreignHandle, (uint)b.wINDOWPLACEMENT.showCmd);
+
+                int dpi1 = GetDpiForWindow(GetMainWindow(this.foreignHandle));
+                int dpi2 = b.Dpi;
+
+
+                float dpiFactor = (float)dpi1 / (float)dpi2;
+
+
+
+                int x = r.Left;
+                int y = r.Top;
+
+                int w = (int)((r.Right - r.Left) * dpiFactor);
+                int h = (int)((r.Bottom - r.Top) * dpiFactor);
+
+
+                MoveWindow(this.foreignHandle, x, y, w, h, true);
+
+
+
+                //MoveWindowMagic(b.Rect, true);
+
+
+                //MoveWindowMagic(backupPlacement, true);
+                //
+                //var currentPos = GetPlacement(this.foreignHandle);
+
+                //MoveWindowMagic(
+
+                //SetWindowPlacement(Handle, ref backupPlacement);
+
+                /*
+                if(pos.showCmd != currentPos.showCmd)
+                    ShowWindow(this.foreignHandle, (uint)pos.showCmd);
+                else
+                    MoveWindow(this.foreignHandle, pos.rcNormalPosition.X, pos.rcNormalPosition.Y, pos.rcNormalPosition.Width-pos.rcNormalPosition.X, pos.rcNormalPosition.Height-pos.rcNormalPosition.Y, true);
+                */
+                HideMe();
+            }
+        }
+
+        unsafe void MoveWindowMagic()
+        {
+            MoveWindowMagic(newPosition);
+        }
+
+
+        unsafe void MoveWindowMagic(Rectangle Position, bool ignoreDPI = false)
         {
             //RECT clientRect = new RECT();
             //GetClientRect(this.foreignHandle, ref clientRect);
+            
+            RECT windowRect = new RECT(Position);
 
 
-            RECT windowRect = new RECT();
-            RECT withoutShadowRect = new RECT();
-            RECT newRect = new RECT(newPosition);
+            Point mousePoint = new Point();
 
-            GetWindowRect(this.foreignHandle, ref windowRect);
-            DwmGetWindowAttribute(this.foreignHandle, DWMWINDOWATTRIBUTE.ExtendedFrameBounds, out withoutShadowRect, Marshal.SizeOf(typeof(RECT)));
+            if (!ignoreDPI)
+            {
 
-            RECT shadowRect = windowRect - withoutShadowRect;
+                ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_NORMAL);
 
+                RECT withoutShadowRect = new RECT();
+                RECT newRect = new RECT(Position);
 
-            int dpi1 = GetDpiForWindow(GetMainWindow(this.foreignHandle));
-            int dpi2 = this.DeviceDpi;
+                GetCursorPos(ref mousePoint);
+                GetWindowRect(this.foreignHandle, ref windowRect);
+                DwmGetWindowAttribute(this.foreignHandle, DWMWINDOWATTRIBUTE.ExtendedFrameBounds, out withoutShadowRect, Marshal.SizeOf(typeof(RECT)));
 
-            float dpiFactor = (float)dpi1 / (float)dpi2;
-
-
-            int x = newRect.Left - Math.Abs(shadowRect.Left) + margin;
-            int y = newRect.Top - Math.Abs(shadowRect.Top) + margin;
-
-            int w = (int)((newRect.Right - newRect.Left) * dpiFactor) + (Math.Abs(shadowRect.Right) + Math.Abs(shadowRect.Left)) - (margin * 2);
-            int h = (int)((newRect.Bottom - newRect.Top) * dpiFactor) + (Math.Abs(shadowRect.Bottom) + Math.Abs(shadowRect.Top)) - (margin * 2);
+                RECT shadowRect = windowRect - withoutShadowRect;
 
 
-            BackupHandlePos(this.foreignHandle);
+                int dpi1 = GetDpiForWindow(GetMainWindow(this.foreignHandle));
+                int dpi2 = this.DeviceDpi;
 
-            ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_NORMAL);
-            MoveWindow(this.foreignHandle, x,y,w,h, true);
+
+                float dpiFactor = (float)dpi1 / (float)dpi2;
+
+
+                int x = newRect.Left - Math.Abs(shadowRect.Left) + margin;
+                int y = newRect.Top - Math.Abs(shadowRect.Top) + margin;
+
+                int w = (int)((newRect.Right - newRect.Left) * dpiFactor) + (Math.Abs(shadowRect.Right) + Math.Abs(shadowRect.Left)) - (margin * 2);
+                int h = (int)((newRect.Bottom - newRect.Top) * dpiFactor) + (Math.Abs(shadowRect.Bottom) + Math.Abs(shadowRect.Top)) - (margin * 2);
+
+
+                //BackupHandlePos(this.foreignHandle);
+
+                
+                MoveWindow(this.foreignHandle, x, y, w, h, true);
+                //
+                //MoveWindow(this.foreignHandle, x, y, w, h, true);
+
+
+            }
+            else
+            {
+                MoveWindow(this.foreignHandle, windowRect.X, windowRect.Y, windowRect.Width, windowRect.Height, true);
+            }
+
+            if (moveMouseIfOnWindow && mousePoint.X >= windowRect.Left && mousePoint.X <= windowRect.Right && mousePoint.Y >= windowRect.Top && mousePoint.Y <= windowRect.Bottom) // mouse cursor on current window
+            {
+                /*
+                int oldRelativeMousePosX = (int)((mousePoint.X - windowRect.X));
+                int oldRelativeMousePosY = (int)((mousePoint.Y - windowRect.Y));
+
+                int newRelativeMousePosX = (int)((newPosition.X + oldRelativeMousePosX) * dpiFactor);
+                int newRelativeMousePosY = (int)((newPosition.Y - oldRelativeMousePosY) * dpiFactor);
+                */
+             //int newMouseX = newPosition.X + newPosition.Width / 2;
+                int newMouseX = newPosition.X + newPosition.Width / 2;
+                //int newMouseY = newPosition.Y + newPosition.Height / 2;
+                int newMouseY = newPosition.Y + newPosition.Height / 2;
+
+
+                MoveCursor(newMouseX, newMouseY);
+            }
+
+            
+
 
             HideMe();
 
             SetForegroundWindow(this.foreignHandle);
             moveOnKeyUp = false;
             this.newPosition = new Rectangle();
+        }
+
+        private void MoveCursor(int x, int y)
+        {
+            /*
+            // Set the Current cursor, move the cursor's Position,
+            // and set its clipping rectangle to the form. 
+
+            this.Cursor = new Cursor(Cursor.Current.Handle);
+            Cursor.Position = new Point(xpos, ypos);
+            Cursor.Position = new Point(xpos, ypos); // wtf?
+            */
+            SetPhysicalCursorPos(x, y);
         }
 
         bool KeymapContains(Keys KeyCode)
@@ -811,10 +998,20 @@ namespace Tactile
 
         void BackupHandlePos(IntPtr Handle)
         {
-            //Rect rect = new Rect();
-            //GetWindowRect(Handle, ref rect);
-            var placement = GetPlacement(Handle);
+            RECT rect = new RECT();
 
+            var placement = GetPlacement(Handle);
+            GetWindowRect(Handle, ref rect);
+
+
+            int dpi = GetDpiForWindow(GetMainWindow(Handle));
+
+            Backup b = new Backup();
+
+            b.wINDOWPLACEMENT = placement;
+            b.Rect = rect;
+            b.screen = Screen.FromHandle(Handle);
+            b.Dpi = dpi;
             /*
             if (positionBackups.ContainsKey(Handle))
                 positionBackups[Handle] = rect;
@@ -823,9 +1020,9 @@ namespace Tactile
             */
 
             if (positionBackups.ContainsKey(Handle))
-                positionBackups[Handle] = placement;
+                positionBackups[Handle] = b;
             else
-                positionBackups.Add(Handle, placement);
+                positionBackups.Add(Handle, b);
 
         }
 
@@ -839,8 +1036,8 @@ namespace Tactile
             //Areas.Clear();
             
 
-            int penwidth = 1;
-            Pen pen = new Pen(Color.LimeGreen, penwidth);
+            //this.lineWidth = 1;
+            Pen pen = new Pen(this.color1, lineWidth);
 
             int fullWidth = this.ClientRectangle.Width;
             int fullHeight = this.ClientRectangle.Height;
@@ -982,13 +1179,24 @@ namespace Tactile
             if (e.KeyCode == lastPressedKey)
                 lastPressedKey = Keys.None;
 
-            if (e.KeyCode == Keys.ShiftKey)
+            if (e.KeyCode == Keys.Alt)
+            {
+                if (macroWasSet)
+                    HideMe();
+            }
+            else if(e.KeyCode == Keys.ShiftKey)
             {
                 this.ShiftIsHold = false;
+                if (windowWasPushed)
+                {
+                    windowWasPushed = false;
+                    HideMe();
+                }
             }
 
             if (moveOnKeyUp)
             {
+                BackupHandlePos(this.foreignHandle);
                 MoveWindowMagic();
             }
 
