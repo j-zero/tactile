@@ -18,6 +18,7 @@ using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
+using Microsoft.Win32;
 
 namespace Tactile
 {
@@ -298,6 +299,7 @@ namespace Tactile
             currentScreen = Screen.PrimaryScreen;
             RefreshScreenBounds(Screen.PrimaryScreen);
             //this.Hide();
+            autorunToolStripMenuItem.Checked = IsAutostartItem();
 
         }
 
@@ -375,6 +377,31 @@ namespace Tactile
             RefreshScreenBounds(newScreen);
         }
 
+        void RefreshScreenBounds()
+        {
+            List<Screen> screenLeftToRight = Screen.AllScreens.OrderBy(x => x.Bounds.Left).ToList();
+            foreach (Screen newScreen in screenLeftToRight)
+            {
+                this.currentScreen = newScreen;
+                this.Hide();
+                base.Width = 100;
+                this.Width = 100;
+
+
+                this.Left = newScreen.WorkingArea.Left;
+                this.Top = newScreen.WorkingArea.Top;
+
+                base.Width = newScreen.WorkingArea.Width;
+                this.Width = newScreen.WorkingArea.Width;
+                this.Height = newScreen.WorkingArea.Height;
+
+                label1.Text = $"WorkingArea: {newScreen.WorkingArea.ToString()}\nthis.Bounds: {this.Bounds.ToString()}\nScreen: {newScreen.DeviceName}";
+
+
+
+                this.Invalidate();
+            }
+        }
 
         void RefreshScreenBounds(Screen newScreen)
         {
@@ -499,6 +526,7 @@ namespace Tactile
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            
             //DebugForm dbgForm = new DebugForm();
             //dbgForm.Show();
         }
@@ -586,7 +614,7 @@ namespace Tactile
                 SetForegroundWindow(this.foreignHandle);
                 HideMe();
             }
-            else if (e.KeyCode == Keys.ControlKey)
+            else if (e.KeyCode == Keys.ControlKey || e.KeyCode == Keys.M)
             {
                 ShowWindow(this.foreignHandle, (uint)ShowWindowCommands.SW_MINIMIZE);
                 this.lastMinimizedHandle = this.foreignHandle;
@@ -1210,6 +1238,50 @@ namespace Tactile
         private void MainForm_ResizeBegin(object sender, EventArgs e)
         {
             this.Invalidate();
+        }
+
+        private void reloadToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RefreshScreenBounds();
+            this.Invalidate();
+        }
+
+        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            notifyIcon1.Visible = false;
+            Application.Exit();
+            Environment.Exit(0);
+        }
+
+        private static bool IsAutostartItem()
+        {
+            using (RegistryKey rkApp = Registry.CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true))
+            {
+                return (rkApp.GetValue(System.Windows.Forms.Application.ProductName) != null);
+            }
+        }
+
+        private static void SetAutostart(bool Value)
+        {
+            using (RegistryKey rkApp = Registry.CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true))
+            {
+                try
+                {
+                    if (Value)
+                        rkApp.SetValue(System.Windows.Forms.Application.ProductName, System.Windows.Forms.Application.ExecutablePath.ToString());
+                    else
+                        rkApp.DeleteValue(System.Windows.Forms.Application.ProductName, false);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void autorunToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            SetAutostart(autorunToolStripMenuItem.Checked);
         }
     }
 }
